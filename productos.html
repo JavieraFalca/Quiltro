@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Productos</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+  <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+  <script src="js/nav.js"></script>
+  <link rel="stylesheet" href="css/style.css">
+  <script>document.addEventListener('DOMContentLoaded', loadNavbar);</script>
+</head>
+
+<body>
+  <!------BARRA MENU----------->
+  <div id="navbar"></div>
+  <!-- Este div está destinado a contener la barra de menú, aunque está vacío en este momento. -->
+
+  <!----------------->
+  <div class="container mt-5">
+    <h2>Productos Guardados</h2>
+
+    <input type="text" id="searchInput" class="form-control mb-3" placeholder="Buscar productos..."
+      oninput="searchProducts()">
+    <!-- Campo de entrada para buscar productos, que llama a la función 'searchProducts' cada vez que el contenido cambia. -->
+
+    <div id="productList" class="list-group"></div>
+    <!-- Este div contendrá la lista de productos que se mostrarán dinámicamente. -->
+  </div>
+
+  <!--::::::::::::::::: F U N C I O N E S ::::::::::::::::-->
+  <script>
+    const productList = document.getElementById('productList');
+    // Se obtiene una referencia al div donde se mostrarán los productos.
+
+    // Cargar productos del localStorage
+    function loadProducts() {
+      // Cargar productos y materiales desde localStorage, o establecer como un array vacío si no existen.
+      const products = JSON.parse(localStorage.getItem('products')) || [];
+      const rawMaterials = JSON.parse(localStorage.getItem('rawMaterials')) || [];
+
+      // Verificar si no hay productos guardados
+      if (products.length === 0) {
+        productList.innerHTML = '<div class="alert alert-info">No hay productos guardados.</div>';
+      } else {
+        // Si hay productos, se generan dinámicamente los elementos de la lista
+        productList.innerHTML = products.map((product, index) => {
+          /*Creamos un array en donde se toma como parámetro el producto que se procesa en
+          la iteración y el indice del producto en el array*/
+          let isStockAvailable = true;
+          let stockIssues = [];
+
+          // Verificar disponibilidad de stock para cada ingrediente
+          product.ingredients.forEach(ingredient => {
+            const rawMaterial = rawMaterials.find(material => material.codigo === ingredient.name);
+
+            // Verificar si el material existe
+            if (rawMaterial) {
+              const requiredQuantity = Number(ingredient.quantity); // Cantidad que requiere el producto
+              const availableQuantity = Number(rawMaterial.cantidad); // Cantidad que hay en el inventario (stock)
+
+              // Verificar si hay suficiente stock
+              if (availableQuantity < requiredQuantity) {
+                stockIssues.push(
+                  `${ingredient.name}: falta ${requiredQuantity - availableQuantity} ${rawMaterial.unidadMedida}`
+                );
+                isStockAvailable = false; // Marcar que hay problemas de stock
+              }
+            } else {
+              stockIssues.push(`${ingredient.name}: no disponible`);
+              isStockAvailable = false; // Marcar que el ingrediente no está disponible
+            }
+          });
+
+          // Retornar el HTML para cada producto
+          return `
+                  <div class="list-group-item">
+                      <h5>${product.name}</h5>
+                      <ul>
+                          ${product.ingredients.map(ingredient => `
+                              <li>${ingredient.name} - Cantidad: ${ingredient.quantity}</li>
+                          `).join('')}
+                      </ul>
+                      ${!isStockAvailable ? `<div class="text-danger">Faltante de stock: ${stockIssues.join(', ')}</div>` : ''}
+                      <button class="button" onclick="goToCreatePage(${index})" ${!isStockAvailable ? 'disabled' : ''}>Crear</button>
+                      <button class="button2" onclick="deleteProduct(${index})">Eliminar</button>
+                  </div>
+              `;
+        }).join('');
+      }
+    }
+
+    function goToCreatePage(index) {
+      const products = JSON.parse(localStorage.getItem('products')) || [];
+      const rawMaterials = JSON.parse(localStorage.getItem('rawMaterials')) || [];
+
+      // Obtener el producto seleccionado
+      const selectedProduct = products[index];
+
+      // Actualizar el stock de materias primas
+      selectedProduct.ingredients.forEach(ingredient => {
+        const rawMaterial = rawMaterials.find(material => material.codigo === ingredient.name);
+
+        // Si se encuentra el material, descontar la cantidad
+        if (rawMaterial) {
+          const requiredQuantity = Number(ingredient.quantity);
+          const availableQuantity = Number(rawMaterial.cantidad);
+
+          // Verificar que hay suficiente stock antes de descontar
+          if (availableQuantity >= requiredQuantity) {
+            rawMaterial.cantidad = availableQuantity - requiredQuantity; // Descontar la cantidad
+          } else {
+            alert(`No hay suficiente stock para ${ingredient.name}.`);
+          }
+        }
+      });
+
+      // Guardar los cambios en el localStorage
+      localStorage.setItem('rawMaterials', JSON.stringify(rawMaterials));
+
+      // Agregar el producto seleccionado al array de productos seleccionados
+      let selectedProducts = JSON.parse(localStorage.getItem('selectedProducts')) || [];
+      selectedProducts.push(selectedProduct);
+      localStorage.setItem('selectedProducts', JSON.stringify(selectedProducts));
+
+      // Mostrar mensaje de éxito
+      alert("Producto enviado a producción exitosamente.");
+
+      location.reload();
+    }
+
+    // Función para eliminar un producto
+    function deleteProduct(index) {
+      const products = JSON.parse(localStorage.getItem('products')) || [];
+      products.splice(index, 1); // Eliminar el producto de la lista
+      localStorage.setItem('products', JSON.stringify(products)); // Actualizar el localStorage
+      loadProducts(); // Recargar la lista de productos
+    }
+
+    // Función para buscar productos
+    function searchProducts() {
+      const query = document.getElementById('searchInput').value.toLowerCase(); // Obtener el valor de búsqueda
+      const products = JSON.parse(localStorage.getItem('products')) || [];
+      productList.innerHTML = products
+        .filter(product => product.name.toLowerCase().includes(query)) // Filtrar productos según la búsqueda
+        .map((product, index) => `...`) // Aquí se debería incluir la lógica para mostrar los productos filtrados
+        .join('');
+    }
+
+    window.addEventListener('load', loadProducts);
+    // Al cargar la ventana, se ejecuta la función 'loadProducts' para cargar los productos guardados.
+  </script>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+  <!-- Se carga Bootstrap para los estilos y componentes. -->
+</body>
+
+</html>
